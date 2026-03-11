@@ -49,14 +49,31 @@ print("=" * 60)
 print("WEEK 7: LOGISTIC REGRESSION")
 print("=" * 60)
 
+print("""
+  What is this demo?
+  -----------------
+  We predict a YES/NO outcome (e.g., "Did this person get a job offer?")
+  using variables like education, experience, and age.
+
+  Key terms:
+  - Binary outcome: the thing we predict (0 = no, 1 = yes)
+  - Predictors: the variables we use to predict (Education, Experience, Age)
+  - Probability: the model gives us a number between 0 and 1, like 0.82 = 82% chance
+
+  We'll walk through each step and explain what each part means.
+""")
+
 # ============================================================================
 # STEP 1: Generate Simulated Data
 # ============================================================================
-print("\n" + "=" * 60)
-print("STEP 1: Generating Simulated Data")
 print("=" * 60)
-print("We will pretend we are predicting whether a person gets a job offer.")
-print("The outcome is binary: 1 = yes, 0 = no.")
+print("STEP 1: The Data")
+print("=" * 60)
+
+print("\n  We use simulated data so the results are easy to reproduce.")
+print("  Imagine we have 500 people with education, experience, and age.")
+print("  For each person, we observe: did they get a job offer (yes=1, no=0)?")
+print()
 
 np.random.seed(42)
 n = 500
@@ -83,196 +100,154 @@ df = pd.DataFrame({
     'JobOffer': job_offer
 })
 
-print(f"Generated {n} observations")
-print(f"\nOutcome distribution:")
-print(f"  No Job Offer: {(job_offer == 0).sum()} ({(job_offer == 0).mean()*100:.1f}%)")
-print(f"  Job Offer:    {(job_offer == 1).sum()} ({(job_offer == 1).mean()*100:.1f}%)")
-print("\nPredictors in this demo:")
-print("  - Education = years of education")
-print("  - Experience = years of work experience")
-print("  - Age = age in years")
-print("\nFirst 10 rows:")
-print(df.head(10).round(2))
+print(f"  Total people: {n}")
+print(f"  Outcome: {(job_offer == 1).sum()} got an offer ({(job_offer == 1).mean()*100:.1f}%), "
+      f"{(job_offer == 0).sum()} did not ({(job_offer == 0).mean()*100:.1f}%)")
+print("\n  Variables:")
+print("    Education  = years of schooling")
+print("    Experience = years of work experience")
+print("    Age        = age in years")
+print("    JobOffer   = 1 if they got an offer, 0 otherwise")
+print("\n  Sample of the data (first 10 rows):")
+print(df.head(10).round(2).to_string(index=False))
 
 # ============================================================================
-# STEP 2: Why Not OLS? ( demonstrate the problem)
+# STEP 2: Why Not OLS?
 # ============================================================================
 print("\n" + "=" * 60)
-print("STEP 2: Why Not OLS for Binary Outcomes?")
+print("STEP 2: Why Not Use Regular Regression (OLS)?")
 print("=" * 60)
 
 # Run OLS anyway (BAD PRACTICE but educational)
 X_ols = sm.add_constant(df[['Education', 'Experience', 'Age']])
 model_ols = sm.OLS(df['JobOffer'], X_ols).fit()
 
-print("\n>>> PROBLEM: OLS on binary data gives:")
-print(f"   - Predicted values outside [0,1]: {((model_ols.fittedvalues < 0) | (model_ols.fittedvalues > 1)).sum()} cases")
-print(f"   - Min prediction: {model_ols.fittedvalues.min():.3f}")
-print(f"   - Max prediction: {model_ols.fittedvalues.max():.3f}")
-print("\n   OLS assumes continuous outcomes with normal errors.")
-print("   Binary outcomes violate these assumptions!")
-print("   Most importantly: a probability should stay between 0 and 1.")
-print("   Logistic regression is built to do exactly that.")
+n_bad = ((model_ols.fittedvalues < 0) | (model_ols.fittedvalues > 1)).sum()
+print("\n  If we used OLS on this 0/1 outcome, the model would predict")
+print("  values that are NOT valid probabilities:")
+print(f"    - Some predictions fall outside 0–1: {n_bad} cases")
+print(f"    - Min prediction: {model_ols.fittedvalues.min():.3f}  (negative!)")
+print(f"    - Max prediction: {model_ols.fittedvalues.max():.3f}")
+print("\n  Takeaway: A probability must be between 0 and 1.")
+print("  Logistic regression always gives predictions in that range.")
 
 # ============================================================================
 # STEP 3: Logistic Regression
 # ============================================================================
 print("\n" + "=" * 60)
-print("STEP 3: Fitting Logistic Regression")
+print("STEP 3: Fitting the Logistic Model")
 print("=" * 60)
 
 X_logit = sm.add_constant(df[['Education', 'Experience', 'Age']])
 model_logit = Logit(df['JobOffer'], X_logit).fit(disp=0)
 
-print("\nLogistic Regression Results:")
-print("-" * 60)
-print(f"{'Variable':<15} {'Coef':>10} {'Std Err':>10} {'z':>8} {'P>|z|':>8}")
-print("-" * 60)
+print("\n  The model estimates a coefficient for each predictor.")
+print("  How to read:")
+print("    Coef   = effect in 'log-odds' (we'll convert to odds ratio next)")
+print("    P>|z|  = p-value; * = significant at 5%, ** at 1%, *** at 0.1%")
+print()
+print("-" * 55)
+print(f"{'Variable':<14} {'Coef':>9} {'P>|z|':>8} {'Signif':>8}")
+print("-" * 55)
 for var in model_logit.params.index:
     coef = model_logit.params[var]
-    se = model_logit.bse[var]
-    z = model_logit.tvalues[var]
     p = model_logit.pvalues[var]
     stars = '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else ''
-    print(f"{var:<15} {coef:>10.4f} {se:>10.4f} {z:>8.2f} {p:>7.4f} {stars}")
-print("-" * 60)
-print("Pseudo R-squared:", f"{model_logit.prsquared:.4f}")
-print("Log-Likelihood:", f"{model_logit.llf:.2f}")
-print("AIC:", f"{model_logit.aic:.2f}")
-print("\nPlain-English note:")
-print("  - Positive coefficient -> higher values of that variable are associated with")
-print("    a HIGHER chance of a job offer.")
-print("  - Negative coefficient -> higher values are associated with a LOWER chance.")
-print("  - But the coefficients are not yet in probability units, so interpretation")
-print("    is easier after we convert them to odds ratios.")
+    print(f"{var:<14} {coef:>9.3f} {p:>7.4f} {stars:>8}")
+print("-" * 55)
+print(f"  (Pseudo R-squared = {model_logit.prsquared:.3f})")
+print("\n  Quick interpretation:")
+print("    Positive Coef -> higher value of that variable = higher chance of offer")
+print("    Negative Coef -> higher value = lower chance")
+print("    We'll convert these to odds ratios next for easier interpretation.")
 
 # ============================================================================
 # CONCEPTUAL INTERLUDE: Log-Odds, Sigmoid, and Odds Ratios
 # ============================================================================
 print("\n" + "=" * 60)
-print("CONCEPTUAL INTERLUDE: How Does Logistic Regression Work?")
+print("HOW DOES LOGISTIC REGRESSION WORK?")
 print("=" * 60)
 
 print("""
-BIG PICTURE:
-   Logistic regression does NOT predict the 0/1 outcome directly.
-   It predicts a probability, like 0.18 or 0.82.
-   Then we can turn that probability into a yes/no prediction if we want.
+  The model predicts a PROBABILITY (0 to 1), not the 0/1 outcome directly.
+  Example: 0.82 means an 82% predicted chance of a job offer.
 
->>> STEP A: START WITH A PROBABILITY
-   Let p = P(JobOffer = 1)
-   Example:
-   - p = 0.25 means a 25% chance of getting an offer
-   - p = 0.50 means a 50% chance
-   - p = 0.75 means a 75% chance
+  Step A — Probability to odds:
+     Odds = p / (1 - p). Examples:
+       p = 0.25 -> odds = 0.33 (less likely than not)
+       p = 0.50 -> odds = 1.00 (50/50)
+       p = 0.75 -> odds = 3.00 (more likely than not)
 
->>> STEP B: CONVERT PROBABILITY TO ODDS
-   Odds = p / (1 - p)
-   Examples:
-   - If p = 0.25, odds = 0.25 / 0.75 = 0.33
-   - If p = 0.50, odds = 0.50 / 0.50 = 1.00
-   - If p = 0.75, odds = 0.75 / 0.25 = 3.00
-
-   Read these as:
-   - odds = 0.33 means the event is less likely than not
-   - odds = 1.00 means 50/50
-   - odds = 3.00 means the event is more likely than not
-
->>> STEP C: TAKE THE LOG OF THE ODDS
-   Log-odds = log(odds) = log(p / (1-p))
-   Why do this?
-   Because log-odds can take any value from -infinity to +infinity,
-   which works nicely with a linear model.
-
-   Example mapping (probability -> log-odds):
+  Step B — Log of odds:
+     log-odds = log(p / (1-p)). This can be any real number, which lets us
+     use a linear equation (like OLS) and then convert back to probability.
 """)
 for p in [0.25, 0.5, 0.75]:
     log_odds = np.log(p / (1 - p))
-    print(f"   p = {p:.2f}  ->  log-odds = {log_odds:.2f}")
+    print(f"       p = {p:.2f}  ->  log-odds = {log_odds:.2f}")
 
 print("""
->>> HOW DOES THE MODEL WORK? (Two steps)
-   Step 1 - LINEAR PART:
-      z = beta_0 + beta_1*X1 + beta_2*X2 + ...
-      This part looks like OLS.
-      z can be any real number (-infinity to +infinity).
+  Step C — The model in two parts:
+     1. Linear part: z = intercept + coef1*X1 + coef2*X2 + ...
+     2. Squeeze z into 0–1: P(Y=1) = 1 / (1 + e^{-z})  [sigmoid curve]
 
-   Step 2 - TURN z INTO A PROBABILITY:
-      P(Y=1) = 1 / (1 + exp(-z))
-      This is the logistic curve, also called the sigmoid curve.
-      It squeezes any z-value into a valid probability between 0 and 1.
-
-   VERY IMPORTANT:
-   The coefficients are in log-odds units, not probability units.
-   So a 1-unit increase in X changes log-odds by beta.
-   That is mathematically correct, but not very intuitive.
-   For interpretation, we usually exponentiate the coefficient.
-
->>> ODDS RATIO FORMULA: OR = exp(beta)
-   - OR > 1: one-unit increase in X MULTIPLIES the odds upward
-   - OR < 1: one-unit increase in X MULTIPLIES the odds downward
-   - OR = 1: no effect
-
-   Quick warning:
-   Odds are NOT the same thing as probability.
-   Saying "odds go up by 40%" does NOT mean
-   "probability goes up by 40 percentage points."
+  Step D — Odds ratios for interpretation:
+     OR = exp(coefficient). OR > 1 = increases odds; OR < 1 = decreases odds.
+     Note: odds are not the same as probability. "Odds up 40%" ≠ "probability up 40%."
 """)
-# Worked example using Education coefficient
+
 beta_edu = model_logit.params['Education']
 or_edu = np.exp(beta_edu)
-print(f"   WORKED EXAMPLE (Education):")
-print(f"   beta_education = {beta_edu:.3f}  ->  OR = exp({beta_edu:.3f}) = {or_edu:.3f}")
-print(f"   Interpretation: Holding the other variables fixed, each extra year of")
-print(f"   education multiplies the odds of a job offer by {or_edu:.2f}.")
-print(f"   That means the odds change by {(or_edu - 1) * 100:.1f}% for each extra year.")
-print()
+print(f"  Worked example (Education):")
+print(f"    Coef = {beta_edu:.3f}  ->  Odds Ratio = exp({beta_edu:.3f}) = {or_edu:.3f}")
+print(f"    Meaning: Each extra year of education multiplies the odds by {or_edu:.2f}")
+print(f"    (i.e., {(or_edu - 1) * 100:.1f}% higher odds per year).")
 
 # ============================================================================
 # STEP 4: Odds Ratios
 # ============================================================================
 print("\n" + "=" * 60)
-print("STEP 4: Odds Ratios (Easy to Interpret!)")
+print("STEP 4: Odds Ratios (Easy to Interpret)")
 print("=" * 60)
 
 odds_ratios = np.exp(model_logit.params)
 
-print("\n>>> ODDS RATIOS: exp(coefficient)")
-print("-" * 60)
-print(f"{'Variable':<15} {'Odds Ratio':>12} {'Interpretation':<30}")
-print("-" * 60)
+print("\n  Odds Ratio = exp(coefficient). We use it because it's easier to interpret.")
+print()
+print("-" * 50)
+print(f"{'Variable':<14} {'Odds Ratio':>10} {'What it means'}")
+print("-" * 50)
 
 for var in ['Education', 'Experience', 'Age']:
     or_val = odds_ratios[var]
     if or_val > 1:
-        interp = f"+{(or_val-1)*100:.1f}% odds per unit"
+        interp = f"{(or_val-1)*100:.0f}% higher odds per unit"
     else:
-        interp = f"{(or_val-1)*100:.1f}% odds per unit"
-    print(f"{var:<15} {or_val:>12.4f} {interp:<30}")
+        interp = f"{abs((or_val-1)*100):.0f}% lower odds per unit"
+    print(f"{var:<14} {or_val:>10.3f}   {interp}")
 
-print("-" * 60)
-print("\n>>> INTERPRETATION EXAMPLES:")
-print(f"   Education: Each additional year -> {(odds_ratios['Education']-1)*100:.1f}% HIGHER odds of a job offer")
-print(f"   Experience: Each additional year -> {(odds_ratios['Experience']-1)*100:.1f}% HIGHER odds of a job offer")
-print(f"   Age: Each additional year -> {abs((odds_ratios['Age']-1)*100):.1f}% LOWER odds of a job offer")
-print("\nImportant reminder:")
-print("   These are changes in odds, not direct changes in probability.")
-print("   The probability effect depends on where you start.")
+print("-" * 50)
+print(f"\n  Education:  +1 year -> {(odds_ratios['Education']-1)*100:.0f}% higher odds of offer")
+print(f"  Experience: +1 year -> {(odds_ratios['Experience']-1)*100:.0f}% higher odds")
+print(f"  Age:        +1 year -> {abs((odds_ratios['Age']-1)*100):.0f}% lower odds")
+print("\n  Remember: these are odds changes, not probability changes.")
 
 # ============================================================================
 # STEP 5: Predictions and Confusion Matrix
 # ============================================================================
 print("\n" + "=" * 60)
-print("STEP 5: Predictions & Confusion Matrix")
+print("STEP 5: Predictions & How Well Did We Do?")
 print("=" * 60)
 
 # Get predicted probabilities
 df['Pred_Prob'] = model_logit.predict(X_logit)
 
-print("\nFirst, logistic regression gives each person a predicted probability.")
-print("Example: 0.82 means an 82% predicted chance of a job offer.")
-print("Only after that do we choose a cutoff, such as 0.50, to turn")
-print("probabilities into yes/no predictions.")
+print("\n  Step 1: The model gives each person a predicted probability.")
+print("          Example: 0.82 = 82% chance of an offer.")
+
+print("\n  Step 2: We choose a cutoff (here, 0.5) to turn probabilities into yes/no.")
+print("          If predicted prob > 0.5  -> we predict 'Offer'")
+print("          If predicted prob ≤ 0.5 -> we predict 'No Offer'")
 
 # Classify at 0.5 threshold
 df['Pred_Class'] = (df['Pred_Prob'] > 0.5).astype(int)
@@ -290,23 +265,25 @@ sensitivity = TP / (TP + FN)  # True positive rate
 specificity = TN / (TN + FP)   # True negative rate
 precision = TP / (TP + FP) if (TP + FP) > 0 else 0
 
-print("\nConfusion Matrix:")
-print("                    Predicted")
-print("                 No Offer  |  Offer")
-print("-" * 40)
-print(f"Actual No Offer:    {TN:>4}   |  {FP:>4}")
-print(f"Actual Offer:       {FN:>4}   |  {TP:>4}")
-print("-" * 40)
+print("\n  Confusion matrix (rows = actual, columns = predicted):")
+print("                        Predicted")
+print("                    No Offer    Offer")
+print("-" * 45)
+print(f"  Actual No Offer    {TN:>5}       {FP:>5}")
+print(f"  Actual Offer       {FN:>5}       {TP:>5}")
+print("-" * 45)
 
-print(f"\nAccuracy:   {accuracy*100:.1f}%")
-print(f"Sensitivity (Recall): {sensitivity*100:.1f}% - Of those who got offers, we predicted correctly")
-print(f"Specificity: {specificity*100:.1f}% - Of those who didn't, we predicted correctly")
-print(f"Precision:  {precision*100:.1f}% - Of those we predicted to get offers, actually got them")
-print("\nHow to read the confusion matrix:")
-print("  - True Positive (TP): predicted offer, and offer actually happened")
-print("  - True Negative (TN): predicted no offer, and no offer actually happened")
-print("  - False Positive (FP): predicted offer, but no offer happened")
-print("  - False Negative (FN): predicted no offer, but offer actually happened")
+print("\n  How to read it:")
+print("    - Top-left (TN): Correctly predicted NO offer")
+print("    - Top-right (FP): Wrong—we said Offer, they didn't get one")
+print("    - Bottom-left (FN): Wrong—we said No Offer, they did get one")
+print("    - Bottom-right (TP): Correctly predicted Offer")
+
+print(f"\n  Summary metrics:")
+print(f"    Accuracy   = {accuracy*100:.1f}%  (fraction of all predictions correct)")
+print(f"    Sensitivity = {sensitivity*100:.1f}%  (of those who got offers, we caught)")
+print(f"    Specificity = {specificity*100:.1f}%  (of those who didn't, we correctly said no)")
+print(f"    Precision  = {precision*100:.1f}%  (of those we said yes to, how many actually got offers)")
 
 # ============================================================================
 # STEP 6: Visualizations
@@ -434,40 +411,31 @@ plt.close()
 # SUMMARY
 # ============================================================================
 print("\n" + "=" * 60)
-print("SUMMARY: KEY TAKEAWAYS")
+print("WHAT TO REMEMBER")
 print("=" * 60)
 print("""
-1. WHEN TO USE LOGISTIC REGRESSION:
-   - Binary outcome (yes/no, 0/1)
-   - OLS would give predictions outside [0,1]
-   - Logistic regression gives valid probabilities between 0 and 1
-   
-2. ODDS RATIOS:
-   - exp(coefficient) = odds ratio
-   - >1: increases odds of outcome
-   - <1: decreases odds of outcome
-   - Odds are not the same as probability
-   
-3. CONFUSION MATRIX:
-   - Shows true/false positives and negatives
-   - Accuracy = (TP + TN) / Total
-   
-4. THRESHOLD MATTERS:
-   - Default is 0.5, but optimal varies
-   - Depends on cost of false positives vs false negatives
-""")
+  1. When to use logistic regression: binary outcome (yes/no). OLS can give
+     invalid probabilities; logistic regression always stays between 0 and 1.
 
-# Parrot-style recap: echo key numbers from this run
-print("\n>>> PARROT: What You Just Saw (this run)")
-print("-" * 60)
-print(f"   Education OR = {odds_ratios['Education']:.3f} -> each year multiplies odds by {odds_ratios['Education']:.2f}")
-print(f"   Experience OR = {odds_ratios['Experience']:.3f}, Age OR = {odds_ratios['Age']:.3f}")
-print(f"   Confusion: {TP + TN} correct, {FP + FN} errors | Accuracy = {accuracy*100:.1f}%")
-print(f"   AUC = {auc_score:.3f} (1.0 = perfect, 0.5 = random)")
-print("-" * 60)
-print("   Main idea: logistic regression predicts probabilities for 0/1 outcomes,")
-print("   and odds ratios help us describe how predictors are associated with those probabilities.")
+  2. Odds ratios: OR = exp(coefficient). OR > 1 means higher X → higher odds;
+     OR < 1 means higher X → lower odds. Odds ≠ probability.
 
-print("\n" + "=" * 60)
-print("LOGISTIC REGRESSION DEMO COMPLETE!")
+  3. Confusion matrix: shows correct vs incorrect predictions. Accuracy =
+     (correct) / (total).
+
+  4. Threshold: we use 0.5 by default, but the best cutoff depends on whether
+     false positives or false negatives are costlier.
+
+  This run: Education OR = {or_ed:.2f}, Experience OR = {or_ex:.2f}, Age OR = {or_ag:.2f}
+  Accuracy = {acc:.1f}%, AUC = {auc:.3f} (1.0 = perfect, 0.5 = random).
+""".format(
+    or_ed=odds_ratios['Education'],
+    or_ex=odds_ratios['Experience'],
+    or_ag=odds_ratios['Age'],
+    acc=accuracy * 100,
+    auc=auc_score,
+))
+
+print("=" * 60)
+print("LOGISTIC REGRESSION DEMO COMPLETE")
 print("=" * 60)
